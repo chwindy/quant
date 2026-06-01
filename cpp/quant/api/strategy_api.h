@@ -51,6 +51,7 @@ private:
     ApiResponse stop_live_strategy(uint64_t id);
     ApiResponse live_status(uint64_t id);
     ApiResponse live_list();
+    ApiResponse set_source_code(uint64_t id, const std::string& body);
 
     ApiResponse handle_data(const std::string& method,
                              const std::vector<std::string>& segments,
