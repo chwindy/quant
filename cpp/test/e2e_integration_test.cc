@@ -175,7 +175,7 @@ protected:
         params.start_time   = 0;
         params.end_time     = 9999999999999999LL;  // wide range to cover all data
         params.symbol       = kSymbol;
-        params.kline_type   = ev::DataType::kKlineDay;
+        params.kline_type   = static_cast<uint8_t>(ev::DataType::kKlineDay);
         return params;
     }
 
@@ -223,7 +223,7 @@ protected:
         params.start_time   = 0;
         params.end_time     = 9999999999999999LL;
         params.symbol       = symbol;
-        params.kline_type   = ev::DataType::kKlineDay;
+        params.kline_type   = static_cast<uint8_t>(ev::DataType::kKlineDay);
         return params;
     }
 

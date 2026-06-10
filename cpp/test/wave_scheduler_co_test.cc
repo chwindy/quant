@@ -1,6 +1,6 @@
 // wave_scheduler_co_test.cc — Tests for WaveScheduler async execution
 #include "wave_scheduler.h"
-#include "task_graph.h"
+#include "cpp/quant/factor/factor_dag.h"
 #include "work_stealing_executor.h"
 #include "coroutine.h"
 
@@ -23,7 +23,7 @@ TEST(WaveSchedulerCoTest, ExecuteAsyncSimpleTasks) {
     auto executor = make_executor();
     executor.start();
 
-    TaskGraph graph;
+    quant::factor::FactorDAG graph(nullptr);
     std::atomic<int> counter{0};
 
     graph.add_task("T1", [&] { counter++; });
@@ -44,7 +44,7 @@ TEST(WaveSchedulerCoTest, ExecuteAsyncWithDependencies) {
     auto executor = make_executor();
     executor.start();
 
-    TaskGraph graph;
+    quant::factor::FactorDAG graph(nullptr);
     std::atomic<int> order{0};
     int a_order = 0, b_order = 0, c_order = 0;
 
@@ -71,7 +71,7 @@ TEST(WaveSchedulerCoTest, ExecuteAsyncTaskSubset) {
     auto executor = make_executor();
     executor.start();
 
-    TaskGraph graph;
+    quant::factor::FactorDAG graph(nullptr);
     std::atomic<int> counter{0};
 
     auto a = graph.add_task("A", [&] { counter++; });
@@ -93,7 +93,7 @@ TEST(WaveSchedulerCoTest, ExecuteAsyncInvalidGraph) {
     auto executor = make_executor();
     executor.start();
 
-    TaskGraph graph;
+    quant::factor::FactorDAG graph(nullptr);
     auto a = graph.add_task("A", []{});
     auto b = graph.add_task("B", []{});
     auto c = graph.add_task("C", []{});
@@ -111,7 +111,7 @@ TEST(WaveSchedulerCoTest, ExecuteAsyncInvalidGraph) {
 }
 
 TEST(WaveSchedulerCoTest, SyncExecutionStillWorks) {
-    TaskGraph graph;
+    quant::factor::FactorDAG graph(nullptr);
     std::atomic<int> counter{0};
 
     graph.add_task("T1", [&] { counter++; });

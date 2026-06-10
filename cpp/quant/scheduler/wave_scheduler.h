@@ -2,10 +2,11 @@
 // Executes tasks in parallel levels respecting DAG dependencies
 #pragma once
 
+#include <cstdint>
 #include <memory>
 #include <vector>
 
-#include "task_graph.h"
+#include "cpp/quant/factor/factor_dag.h"
 #include "coroutine.h"
 
 namespace quant::infra {
@@ -21,6 +22,8 @@ struct WaveSchedulerConfig {
 };
 
 // ── Schedule execution result ──
+using WaveTaskId = uint64_t;
+
 struct WaveExecutionResult {
     bool success{true};
     std::string error_message;
@@ -28,7 +31,7 @@ struct WaveExecutionResult {
     size_t completed_tasks{0};
     size_t failed_tasks{0};
     int64_t total_duration_ns{0};
-    std::vector<std::pair<TaskId, int64_t>> task_timings;
+    std::vector<std::pair<WaveTaskId, int64_t>> task_timings;
 };
 
 // ── WaveScheduler: executes tasks in parallel waves ──
@@ -41,19 +44,19 @@ public:
     WaveScheduler& operator=(const WaveScheduler&) = delete;
 
     // ── Synchronous execution (legacy, uses std::thread) ──
-    WaveExecutionResult execute(TaskGraph& graph);
-    WaveExecutionResult execute_tasks(TaskGraph& graph,
-                                       const std::vector<TaskId>& task_ids);
+    WaveExecutionResult execute(factor::FactorDAG& graph);
+    WaveExecutionResult execute_tasks(factor::FactorDAG& graph,
+                                       const std::vector<WaveTaskId>& task_ids);
 
     // ── Coroutine-based async execution ──
     // Runs each wave's tasks concurrently on the given executor.
     quant::infra::CoTask<WaveExecutionResult>
-    execute_async(TaskGraph& graph,
+    execute_async(factor::FactorDAG& graph,
                   quant::infra::WorkStealingExecutor& executor);
 
     quant::infra::CoTask<WaveExecutionResult>
-    execute_tasks_async(TaskGraph& graph,
-                         const std::vector<TaskId>& task_ids,
+    execute_tasks_async(factor::FactorDAG& graph,
+                         const std::vector<WaveTaskId>& task_ids,
                          quant::infra::WorkStealingExecutor& executor);
 
     const WaveSchedulerConfig& config() const noexcept { return config_; }

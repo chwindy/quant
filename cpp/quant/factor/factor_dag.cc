@@ -1,4 +1,4 @@
-// factor_dag.cc — FactorDAG implementation
+// factor_dag.cc — FactorDAG implementation (canonical DAG)
 #include "cpp/quant/factor/factor_dag.h"
 
 #include <algorithm>
@@ -12,6 +12,28 @@ namespace quant::factor {
 
 FactorDAG::FactorDAG(const FactorRegistry* registry)
     : registry_(registry) {}
+
+// ── Generic task interface ──
+
+FactorId FactorDAG::add_task(std::string name, std::function<void()> execute_fn) {
+    FactorId id = next_task_id_++;
+    tasks_[id] = std::make_unique<DagNode>(id, std::move(name), std::move(execute_fn));
+    deps_[id] = {};
+    dependents_[id] = {};
+    return id;
+}
+
+DagNode* FactorDAG::get_task(FactorId id) {
+    auto it = tasks_.find(id);
+    return it != tasks_.end() ? it->second.get() : nullptr;
+}
+
+const DagNode* FactorDAG::get_task(FactorId id) const {
+    auto it = tasks_.find(id);
+    return it != tasks_.end() ? it->second.get() : nullptr;
+}
+
+// ── Common interface ──
 
 void FactorDAG::add_dependency(FactorId dependent, FactorId dependency) {
     deps_[dependent].push_back(dependency);
@@ -50,7 +72,10 @@ std::unique_ptr<FactorDAG> FactorDAG::from_graph(
         // Set inputs from edges (will be filled after edge processing)
         // For now, use the port names from the IR node
         for (const auto& [port_name, port_def] : node.inputs) {
-            meta.inputs.push_back(port_def.source);
+            // Use port_name as the key — compute_fn looks up inputs by port name,
+            // not by source string. source is the semantic origin (e.g. "close")
+            // while port_name is what the function expects (e.g. "price").
+            meta.inputs.push_back(port_name);
         }
         for (const auto& [port_name, port_def] : node.outputs) {
             meta.outputs.push_back(node.id + "." + port_name);
@@ -111,14 +136,22 @@ DAGValidationResult FactorDAG::validate() const {
     std::unordered_set<FactorId> in_stack;
     std::vector<FactorId> order;
 
-    auto factors = registry_->list_factors();
-    for (const auto& meta : factors) {
-        FactorId id = registry_->find_id(meta.name);
+    // Visit all nodes: factor-backed + generic tasks
+    std::vector<FactorId> all_ids;
+    all_ids.reserve(deps_.size());
+    for (const auto& [id, _] : deps_) {
+        all_ids.push_back(id);
+    }
+    for (const auto& [id, _] : tasks_) {
+        if (!deps_.contains(id)) all_ids.push_back(id);
+    }
+
+    for (auto id : all_ids) {
         if (!visited.contains(id)) {
             std::vector<FactorId> cycle_path;
             if (!dfs_topo(id, visited, in_stack, order, cycle_path)) {
                 result.valid = false;
-                result.message = "Cycle detected in factor dependency graph";
+                result.message = "Cycle detected in dependency graph";
                 result.cycle_path = std::move(cycle_path);
                 return result;
             }
@@ -134,9 +167,16 @@ std::vector<FactorId> FactorDAG::topological_sort() const {
     std::unordered_set<FactorId> in_stack;
     std::vector<FactorId> cycle_path;
 
-    auto factors = registry_->list_factors();
-    for (const auto& meta : factors) {
-        FactorId id = registry_->find_id(meta.name);
+    std::vector<FactorId> all_ids;
+    all_ids.reserve(deps_.size());
+    for (const auto& [id, _] : deps_) {
+        all_ids.push_back(id);
+    }
+    for (const auto& [id, _] : tasks_) {
+        if (!deps_.contains(id)) all_ids.push_back(id);
+    }
+
+    for (auto id : all_ids) {
         if (!visited.contains(id)) {
             dfs_topo(id, visited, in_stack, order, cycle_path);
         }
@@ -190,6 +230,8 @@ std::vector<FactorId> FactorDAG::get_dependents(FactorId id) const {
 void FactorDAG::clear() {
     deps_.clear();
     dependents_.clear();
+    tasks_.clear();
+    next_task_id_ = 1;
     built_ = false;
 }
 

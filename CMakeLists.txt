@@ -211,18 +211,16 @@ target_link_libraries(quant_execution PUBLIC quant_infra)
 
 # ── scheduler library ──
 add_library(quant_scheduler
-    cpp/quant/scheduler/task_graph.cc
     cpp/quant/scheduler/wave_scheduler.cc
     cpp/quant/scheduler/cron_scheduler.cc
     cpp/quant/scheduler/scheduler_service.cc
-    cpp/quant/scheduler/execution_dag.cc
 )
 target_include_directories(quant_scheduler PUBLIC
     ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/cpp/quant/infra
     ${CMAKE_SOURCE_DIR}/cpp/quant/scheduler
 )
-target_link_libraries(quant_scheduler PUBLIC quant_infra)
+target_link_libraries(quant_scheduler PUBLIC quant_infra quant_factor)
 
 # ── factor library ──
 add_library(quant_factor
@@ -317,7 +315,8 @@ find_package(pybind11 CONFIG QUIET)
 if(pybind11_FOUND)
     pybind11_add_module(_quant_core
         cpp/quant/pybind/pybind_module.cc
-        cpp/quant/pybind/py_storage.cc
+        # TODO: py_storage.cc needs migration to new StorageEngine/TimeSeriesStore API
+        # cpp/quant/pybind/py_storage.cc
         cpp/quant/pybind/py_factor.cc
         cpp/quant/pybind/py_execution.cc
         cpp/quant/pybind/py_risk.cc
@@ -435,10 +434,6 @@ add_test(NAME http_server_test COMMAND http_server_test)
 add_executable(scheduler_test cpp/test/scheduler_test.cc)
 target_link_libraries(scheduler_test PRIVATE quant_scheduler GTest::gtest_main)
 add_test(NAME scheduler_test COMMAND scheduler_test)
-
-add_executable(execution_dag_test cpp/test/execution_dag_test.cc)
-target_link_libraries(execution_dag_test PRIVATE quant_scheduler quant_infra folly GTest::gtest_main)
-add_test(NAME execution_dag_test COMMAND execution_dag_test)
 
 # ── AffinityBaton test ──
 add_executable(affinity_baton_test cpp/test/affinity_baton_test.cc)

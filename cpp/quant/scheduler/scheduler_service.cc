@@ -4,7 +4,7 @@
 namespace quant::scheduler {
 
 SchedulerService::SchedulerService()
-    : graph_(std::make_unique<TaskGraph>())
+    : graph_(std::make_unique<factor::FactorDAG>(nullptr))
     , wave_(std::make_unique<WaveScheduler>())
     , cron_(std::make_unique<CronScheduler>()) {}
 
