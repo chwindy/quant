@@ -19,7 +19,8 @@ class StrategyApiTest : public ::testing::Test {
 protected:
     void SetUp() override {
         bus_ = std::make_unique<ev::EventBus>(ev::EventBus::Options{});
-        storage_ = std::make_unique<quant::storage::StorageEngine>();
+        storage_ = std::make_unique<quant::storage::StorageEngine>(
+            quant::storage::StorageEngine::Options{});
         engine_ = std::make_unique<strat::StrategyEngine>(*bus_, *storage_);
         runner_ = std::make_unique<bt::BacktestRunner>(*storage_, *bus_);
         api_ = std::make_unique<api::StrategyApi>(*engine_, *runner_, *storage_);

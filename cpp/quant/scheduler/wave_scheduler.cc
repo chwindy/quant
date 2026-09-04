@@ -9,6 +9,7 @@
 
 #include "coroutine.h"
 #include "work_stealing_executor.h"
+#include "affinity_mutex.h"
 
 namespace quant::scheduler {
 
@@ -19,7 +20,7 @@ WaveScheduler::~WaveScheduler() = default;
 
 // ── Synchronous execution (legacy) ──
 
-WaveExecutionResult WaveScheduler::execute(TaskGraph& graph) {
+WaveExecutionResult WaveScheduler::execute(factor::FactorDAG& graph) {
     auto validation = graph.validate();
     if (!validation.valid) {
         WaveExecutionResult r;
@@ -43,14 +44,14 @@ WaveExecutionResult WaveScheduler::execute(TaskGraph& graph) {
             size_t end = std::min(i + concurrency, level.size());
 
             for (size_t j = i; j < end; ++j) {
-                TaskId id = level[j];
+                factor::FactorId id = level[j];
                 threads.emplace_back([&graph, id, &result]() {
                     auto* task = graph.get_task(id);
                     if (!task) return;
 
-                    TaskStatus expected = TaskStatus::kPending;
+                    factor::DagTaskStatus expected = factor::DagTaskStatus::kPending;
                     if (!task->status.compare_exchange_strong(
-                            expected, TaskStatus::kRunning)) return;
+                            expected, factor::DagTaskStatus::kRunning)) return;
 
                     auto tstart = std::chrono::high_resolution_clock::now();
                     task->started_at = std::chrono::duration_cast<
@@ -58,9 +59,9 @@ WaveExecutionResult WaveScheduler::execute(TaskGraph& graph) {
 
                     try {
                         task->execute_fn();
-                        task->status.store(TaskStatus::kCompleted);
+                        task->status.store(factor::DagTaskStatus::kCompleted);
                     } catch (const std::exception& e) {
-                        task->status.store(TaskStatus::kFailed);
+                        task->status.store(factor::DagTaskStatus::kFailed);
                         task->error_message = e.what();
                     }
 
@@ -70,7 +71,7 @@ WaveExecutionResult WaveScheduler::execute(TaskGraph& graph) {
                     auto duration = std::chrono::duration_cast<
                         std::chrono::nanoseconds>(tend - tstart).count();
 
-                    if (task->status.load() == TaskStatus::kCompleted) {
+                    if (task->status.load() == factor::DagTaskStatus::kCompleted) {
                         result.completed_tasks++;
                     } else {
                         result.failed_tasks++;
@@ -94,12 +95,12 @@ WaveExecutionResult WaveScheduler::execute(TaskGraph& graph) {
 }
 
 WaveExecutionResult WaveScheduler::execute_tasks(
-    TaskGraph& graph, const std::vector<TaskId>& task_ids) {
+    factor::FactorDAG& graph, const std::vector<WaveTaskId>& task_ids) {
     // Traverse to collect all transitive dependencies
-    std::unordered_set<TaskId> all_ids(task_ids.begin(), task_ids.end());
-    std::vector<TaskId> stack(task_ids.begin(), task_ids.end());
+    std::unordered_set<factor::FactorId> all_ids(task_ids.begin(), task_ids.end());
+    std::vector<factor::FactorId> stack(task_ids.begin(), task_ids.end());
     while (!stack.empty()) {
-        TaskId id = stack.back(); stack.pop_back();
+        factor::FactorId id = stack.back(); stack.pop_back();
         for (auto dep : graph.get_dependencies(id)) {
             if (!all_ids.contains(dep)) {
                 all_ids.insert(dep);
@@ -109,8 +110,8 @@ WaveExecutionResult WaveScheduler::execute_tasks(
     }
 
     // Build filtered graph
-    TaskGraph filtered;
-    std::unordered_map<TaskId, TaskId> id_map;
+    factor::FactorDAG filtered(nullptr);
+    std::unordered_map<factor::FactorId, factor::FactorId> id_map;
     for (auto id : all_ids) {
         auto* task = graph.get_task(id);
         if (!task) continue;
@@ -133,7 +134,7 @@ WaveExecutionResult WaveScheduler::execute_tasks(
 
 quant::infra::CoTask<WaveExecutionResult>
 WaveScheduler::execute_async(
-    TaskGraph& graph,
+    factor::FactorDAG& graph,
     quant::infra::WorkStealingExecutor& executor) {
     auto validation = graph.validate();
     if (!validation.valid) {
@@ -150,27 +151,19 @@ WaveScheduler::execute_async(
     auto start = std::chrono::high_resolution_clock::now();
 
     for (auto& level : levels) {
-        // Use add() + promise/future to schedule each task directly on the
-        // executor. This avoids the complex co_withExecutor/co_submit wrapping
-        // needed to run tasks on a different executor from within collectAllRange.
-        // std::promise+future is used instead of a Baton because the coroutine
-        // runs on ManualExecutor (from blockingWait), which doesn't integrate
-        // with WorkStealingExecutor's thread-affine resumption.
-        // A mutex protects the shared result struct since multiple workers
-        // update completed_tasks/failed_tasks/task_timings concurrently.
         std::atomic<size_t> remaining{level.size()};
         std::promise<void> level_promise;
         auto level_future = level_promise.get_future();
-        std::mutex result_mutex;
+        infra::AffinityMutex result_mutex;
 
-        for (TaskId id : level) {
+        for (factor::FactorId id : level) {
             executor.add([&, id]() {
                 auto* task = graph.get_task(id);
                 if (!task) return;
 
-                TaskStatus expected = TaskStatus::kPending;
+                factor::DagTaskStatus expected = factor::DagTaskStatus::kPending;
                 if (!task->status.compare_exchange_strong(
-                        expected, TaskStatus::kRunning)) return;
+                        expected, factor::DagTaskStatus::kRunning)) return;
 
                 auto tstart = std::chrono::high_resolution_clock::now();
                 task->started_at = std::chrono::duration_cast<
@@ -178,9 +171,9 @@ WaveScheduler::execute_async(
 
                 try {
                     task->execute_fn();
-                    task->status.store(TaskStatus::kCompleted);
+                    task->status.store(factor::DagTaskStatus::kCompleted);
                 } catch (const std::exception& e) {
-                    task->status.store(TaskStatus::kFailed);
+                    task->status.store(factor::DagTaskStatus::kFailed);
                     task->error_message = e.what();
                 }
 
@@ -191,8 +184,8 @@ WaveScheduler::execute_async(
                     std::chrono::nanoseconds>(tend - tstart).count();
 
                 {
-                    std::lock_guard<std::mutex> lock(result_mutex);
-                    if (task->status.load() == TaskStatus::kCompleted) {
+                    auto lock = infra::blockingWait(result_mutex.co_scoped_lock());
+                    if (task->status.load() == factor::DagTaskStatus::kCompleted) {
                         result.completed_tasks++;
                     } else {
                         result.failed_tasks++;
@@ -219,14 +212,14 @@ WaveScheduler::execute_async(
 
 quant::infra::CoTask<WaveExecutionResult>
 WaveScheduler::execute_tasks_async(
-    TaskGraph& graph,
-    const std::vector<TaskId>& task_ids,
+    factor::FactorDAG& graph,
+    const std::vector<WaveTaskId>& task_ids,
     quant::infra::WorkStealingExecutor& executor) {
     // Traverse to collect all transitive dependencies
-    std::unordered_set<TaskId> all_ids(task_ids.begin(), task_ids.end());
-    std::vector<TaskId> stack(task_ids.begin(), task_ids.end());
+    std::unordered_set<factor::FactorId> all_ids(task_ids.begin(), task_ids.end());
+    std::vector<factor::FactorId> stack(task_ids.begin(), task_ids.end());
     while (!stack.empty()) {
-        TaskId id = stack.back(); stack.pop_back();
+        factor::FactorId id = stack.back(); stack.pop_back();
         for (auto dep : graph.get_dependencies(id)) {
             if (!all_ids.contains(dep)) {
                 all_ids.insert(dep);
@@ -236,8 +229,8 @@ WaveScheduler::execute_tasks_async(
     }
 
     // Build filtered graph
-    TaskGraph filtered;
-    std::unordered_map<TaskId, TaskId> id_map;
+    factor::FactorDAG filtered(nullptr);
+    std::unordered_map<factor::FactorId, factor::FactorId> id_map;
     for (auto id : all_ids) {
         auto* task = graph.get_task(id);
         if (!task) continue;

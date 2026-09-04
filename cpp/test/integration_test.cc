@@ -1,5 +1,5 @@
 // integration_test.cc — T10: 调度/线程/利用率三大观测
-#include "task_graph.h"
+#include "cpp/quant/factor/factor_dag.h"
 #include "wave_scheduler.h"
 #include "work_stealing_executor.h"
 #include "coroutine.h"
@@ -20,7 +20,7 @@ TEST(IntegrationTest, SchedulingObservation) {
     WorkStealingExecutor ex(4);
     ex.start();
 
-    TaskGraph graph;
+    quant::factor::FactorDAG graph(nullptr);
     std::atomic<int> counter{0};
 
     auto a = graph.add_task("A", [&] { counter++; });
@@ -110,7 +110,7 @@ TEST(IntegrationTest, MultiLevelDagScheduling) {
     WorkStealingExecutor ex(4);
     ex.start();
 
-    TaskGraph graph;
+    quant::factor::FactorDAG graph(nullptr);
     std::atomic<int> exec_order{0};
     int a_ord = 0, b_ord = 0, c_ord = 0, d_ord = 0;
     int e_ord = 0, f_ord = 0, g_ord = 0;

@@ -82,7 +82,7 @@ void bind_backtest(py::module_& m) {
                 return static_cast<int>(p.kline_type);
             },
             [](backtest::BacktestParams& p, int v) {
-                p.kline_type = static_cast<quant::event::DataType>(v);
+                p.kline_type = static_cast<uint8_t>(v);
             })
         .def("__repr__", [](const backtest::BacktestParams& p) {
             return "<BacktestParams symbol=" + p.symbol

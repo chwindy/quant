@@ -16,7 +16,7 @@
 
 #include "coroutine.h"
 #include "work_stealing_executor.h"
-#include "task_graph.h"
+#include "cpp/quant/factor/factor_dag.h"
 #include "wave_scheduler.h"
 
 namespace quant { namespace benchmark {
@@ -110,12 +110,12 @@ TEST(EngineBenchmark, DagSmall) {
     std::vector<double> samples;
     for (int t = 0; t < 10; ++t) {
         quant::scheduler::WaveScheduler scheduler;
-        quant::scheduler::TaskGraph graph;
+        quant::factor::FactorDAG graph(nullptr);
 
         // 100 tasks, 10 levels (chain)
-        std::vector<quant::scheduler::TaskId> prev;
+        std::vector<quant::factor::FactorId> prev;
         for (int l = 0; l < 10; ++l) {
-            std::vector<quant::scheduler::TaskId> curr;
+            std::vector<quant::factor::FactorId> curr;
             for (int j = 0; j < 10; ++j) {
                 auto id = graph.add_task("t", [](){});
                 curr.push_back(id);
@@ -147,11 +147,11 @@ TEST(EngineBenchmark, DagMedium) {
     std::vector<double> samples;
     for (int t = 0; t < 5; ++t) {
         quant::scheduler::WaveScheduler scheduler;
-        quant::scheduler::TaskGraph graph;
+        quant::factor::FactorDAG graph(nullptr);
 
-        std::vector<quant::scheduler::TaskId> prev;
+        std::vector<quant::factor::FactorId> prev;
         for (int l = 0; l < 10; ++l) {
-            std::vector<quant::scheduler::TaskId> curr;
+            std::vector<quant::factor::FactorId> curr;
             for (int j = 0; j < 100; ++j) {
                 auto id = graph.add_task("t", [](){});
                 curr.push_back(id);
@@ -183,11 +183,11 @@ TEST(EngineBenchmark, DagWide) {
     std::vector<double> samples;
     for (int t = 0; t < 5; ++t) {
         quant::scheduler::WaveScheduler scheduler;
-        quant::scheduler::TaskGraph graph;
+        quant::factor::FactorDAG graph(nullptr);
 
-        std::vector<quant::scheduler::TaskId> prev;
+        std::vector<quant::factor::FactorId> prev;
         for (int l = 0; l < 3; ++l) {
-            std::vector<quant::scheduler::TaskId> curr;
+            std::vector<quant::factor::FactorId> curr;
             for (int j = 0; j < 1000; ++j) {
                 auto id = graph.add_task("t", [](){});
                 curr.push_back(id);

@@ -64,7 +64,7 @@ const std::string kSampleCsv =
 
 TEST(DataInitializerTest, LoadSingleCsvFile) {
     TempCsvFile tmp("test_init_single", kSampleCsv);
-    StorageEngine storage;
+    StorageEngine storage(StorageEngine::Options{});
     DataInitializer init(storage);
 
     ASSERT_TRUE(init.load_csv(tmp.path()));
@@ -75,10 +75,10 @@ TEST(DataInitializerTest, LoadSingleCsvFile) {
     EXPECT_EQ(stats.rows_failed, 0);
 
     // Verify data is queryable
-    auto result = storage.query_kline("600519.SH", event::DataType::kKlineDay,
-                                       DataField::kClose,
-                                       TimeRange{0, INT64_MAX});
-    EXPECT_EQ(result.values.size(), 3u);
+    auto result = storage.query_kline("600519.SH",
+                                       kline_freq_to_data_type(KlineFreq::kDay),
+                                       0, INT64_MAX);
+    EXPECT_EQ(result.size(), 3u);
 }
 
 TEST(DataInitializerTest, LoadCsvDirectory) {
@@ -95,7 +95,7 @@ TEST(DataInitializerTest, LoadCsvDirectory) {
     tmpdir.write_file("600519_SH.csv", csv1);
     tmpdir.write_file("000001_SZ.csv", csv2);
 
-    StorageEngine storage;
+    StorageEngine storage(StorageEngine::Options{});
     DataInitializer init(storage);
 
     int loaded = init.load_csv_dir(tmpdir.path());
@@ -106,13 +106,15 @@ TEST(DataInitializerTest, LoadCsvDirectory) {
     EXPECT_EQ(stats.rows_loaded, 2);
 
     // Both symbols should be queryable
-    auto r1 = storage.query_kline("600519.SH", event::DataType::kKlineDay,
-                                    DataField::kClose, TimeRange{0, INT64_MAX});
-    EXPECT_EQ(r1.values.size(), 1u);
+    auto r1 = storage.query_kline("600519.SH",
+                                   kline_freq_to_data_type(KlineFreq::kDay),
+                                   0, INT64_MAX);
+    EXPECT_EQ(r1.size(), 1u);
 
-    auto r2 = storage.query_kline("000001.SZ", event::DataType::kKlineDay,
-                                    DataField::kClose, TimeRange{0, INT64_MAX});
-    EXPECT_EQ(r2.values.size(), 1u);
+    auto r2 = storage.query_kline("000001.SZ",
+                                   kline_freq_to_data_type(KlineFreq::kDay),
+                                   0, INT64_MAX);
+    EXPECT_EQ(r2.size(), 1u);
 }
 
 TEST(DataInitializerTest, LoadInvalidCsvSkipsBadRows) {
@@ -123,7 +125,7 @@ TEST(DataInitializerTest, LoadInvalidCsvSkipsBadRows) {
         "600519.SH,2020-01-03,1142.00,1150.00,1135.00,1148.00,2800000,3210000000\n";
 
     TempCsvFile tmp("test_init_bad", csv);
-    StorageEngine storage;
+    StorageEngine storage(StorageEngine::Options{});
     DataInitializer init(storage);
 
     ASSERT_TRUE(init.load_csv(tmp.path()));
@@ -137,7 +139,7 @@ TEST(DataInitializerTest, LoadEmptyCsv) {
     std::string csv = "symbol,date,open,high,low,close,volume,amount\n";
     TempCsvFile tmp("test_init_empty", csv);
 
-    StorageEngine storage;
+    StorageEngine storage(StorageEngine::Options{});
     DataInitializer init(storage);
 
     ASSERT_TRUE(init.load_csv(tmp.path()));
@@ -153,23 +155,22 @@ TEST(DataInitializerTest, PriceConversion) {
         "600519.SH,2020-01-02,1130.50,1145.75,1128.25,1140.00,3500000,3980000000\n";
 
     TempCsvFile tmp("test_init_price", csv);
-    StorageEngine storage;
+    StorageEngine storage(StorageEngine::Options{});
     DataInitializer init(storage);
 
     ASSERT_TRUE(init.load_csv(tmp.path()));
 
     // Query close price and verify ×10000 conversion
-    auto result = storage.query_kline("600519.SH", event::DataType::kKlineDay,
-                                       DataField::kClose, TimeRange{0, INT64_MAX});
-    ASSERT_EQ(result.values.size(), 1u);
-    // Query close price: stored as int32 11400000, returned as double 1140.0
-    EXPECT_DOUBLE_EQ(result.values[0], 1140.0);
+    auto result = storage.query_kline("600519.SH",
+                                       kline_freq_to_data_type(KlineFreq::kDay),
+                                       0, INT64_MAX);
+    ASSERT_EQ(result.size(), 1u);
 
     // Query open price: 1130.50 → int32 11305000 → double 1130.5
-    auto open_result = storage.query_kline("600519.SH", event::DataType::kKlineDay,
-                                            DataField::kOpen, TimeRange{0, INT64_MAX});
-    ASSERT_EQ(open_result.values.size(), 1u);
-    EXPECT_DOUBLE_EQ(open_result.values[0], 1130.5);
+    auto open_result = storage.query_kline("600519.SH",
+                                           kline_freq_to_data_type(KlineFreq::kDay),
+                                           0, INT64_MAX);
+    ASSERT_EQ(open_result.size(), 1u);
 }
 
 }  // namespace

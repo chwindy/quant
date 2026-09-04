@@ -125,20 +125,21 @@ const Backtest: React.FC = () => {
         }),
       });
       const data = await res.json();
-      if (data.backtest_id) {
+      if (!res.ok) {
+        message.error(data.detail || data.error || '请求失败');
+      } else {
         message.success('回测任务已提交');
+        const taskId = data.backtest_id || data.task_id || `bt_${Date.now()}`;
         const newTask: BacktestTask = {
-          task_id: data.backtest_id,
-          status: 'pending',
-          progress: 0,
-          message: '已排队',
+          task_id: taskId,
+          status: data.status || 'completed',
+          progress: data.progress ?? 100,
+          message: data.message || '已完成',
           strategy_id: stratId,
         };
         setTasks(prev => [newTask, ...prev]);
-        setPollingIds(prev => new Set(prev).add(data.backtest_id));
+        setPollingIds(prev => new Set(prev).add(taskId));
         form.resetFields();
-      } else {
-        message.error(data.detail || '提交失败');
       }
     } catch (e) {
       message.error('网络错误');

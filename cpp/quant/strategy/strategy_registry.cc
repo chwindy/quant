@@ -8,7 +8,8 @@ namespace quant::strategy {
 uint64_t StrategyRegistry::register_strategy(
     const std::string& name,
     const std::string& graph_path,
-    const std::unordered_map<std::string, double>& params) {
+    const std::unordered_map<std::string, double>& params,
+    const std::string& source_code) {
     uint64_t id = next_id_++;
     auto now = std::chrono::system_clock::now().time_since_epoch();
     int64_t ts = std::chrono::duration_cast<std::chrono::seconds>(now).count();
@@ -17,6 +18,7 @@ uint64_t StrategyRegistry::register_strategy(
     entry.id = id;
     entry.name = name;
     entry.graph_path = graph_path;
+    entry.source_code = source_code;
     entry.params = params;
     entry.status = StrategyStatus::kDraft;
     entry.created_at = ts;
@@ -25,6 +27,15 @@ uint64_t StrategyRegistry::register_strategy(
     entries_[id] = std::move(entry);
     name_index_[name] = id;
     return id;
+}
+
+bool StrategyRegistry::set_source_code(uint64_t id, const std::string& code) {
+    auto it = entries_.find(id);
+    if (it == entries_.end()) return false;
+    it->second.source_code = code;
+    auto now = std::chrono::system_clock::now().time_since_epoch();
+    it->second.updated_at = std::chrono::duration_cast<std::chrono::seconds>(now).count();
+    return true;
 }
 
 bool StrategyRegistry::update_graph_path(uint64_t id, const std::string& graph_path) {

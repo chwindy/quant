@@ -19,6 +19,7 @@ struct StrategyEntry {
     uint64_t id = 0;
     std::string name;
     std::string graph_path;
+    std::string source_code;
     StrategyStatus status = StrategyStatus::kDraft;
     std::unordered_map<std::string, double> params;
     int64_t created_at = 0;
@@ -31,7 +32,10 @@ public:
 
     uint64_t register_strategy(const std::string& name,
                                 const std::string& graph_path,
-                                const std::unordered_map<std::string, double>& params = {});
+                                const std::unordered_map<std::string, double>& params = {},
+                                const std::string& source_code = "");
+
+    bool set_source_code(uint64_t id, const std::string& code);
 
     bool update_graph_path(uint64_t id, const std::string& graph_path);
     bool update_params(uint64_t id, const std::unordered_map<std::string, double>& params);

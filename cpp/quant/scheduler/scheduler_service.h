@@ -4,8 +4,8 @@
 #include <memory>
 #include <vector>
 
+#include "cpp/quant/factor/factor_dag.h"
 #include "cpp/quant/scheduler/cron_scheduler.h"
-#include "cpp/quant/scheduler/task_graph.h"
 #include "cpp/quant/scheduler/wave_scheduler.h"
 
 namespace quant::scheduler {
@@ -20,7 +20,7 @@ public:
     SchedulerService& operator=(const SchedulerService&) = delete;
 
     // Wave scheduling
-    TaskGraph& graph() noexcept { return *graph_; }
+    factor::FactorDAG& graph() noexcept { return *graph_; }
     WaveScheduler& wave() noexcept { return *wave_; }
 
     WaveExecutionResult run_graph();
@@ -36,7 +36,7 @@ public:
     void stop();
 
 private:
-    std::unique_ptr<TaskGraph> graph_;
+    std::unique_ptr<factor::FactorDAG> graph_;
     std::unique_ptr<WaveScheduler> wave_;
     std::unique_ptr<CronScheduler> cron_;
     bool started_{false};

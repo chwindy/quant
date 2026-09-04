@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Button, Table, Tag, Space, Typography, Input, Spin, Alert, Empty, Popconfirm, message } from 'antd';
+import { Button, Table, Tag, Space, Typography, Input, Spin, Alert, Empty, Popconfirm, message, Modal } from 'antd';
 import {
   PlusOutlined, SearchOutlined, PlayCircleOutlined, PauseCircleOutlined,
-  DeleteOutlined, BarChartOutlined, CopyOutlined, UploadOutlined,
+  DeleteOutlined, BarChartOutlined, CopyOutlined, UploadOutlined, CodeOutlined,
 } from '@ant-design/icons';
 import type { Strategy } from '../../api/strategy';
 import { useStrategyStore } from '../../stores/strategyStore';
@@ -133,6 +133,9 @@ const StrategyList: React.FC = () => {
           <Button size="small" icon={<CopyOutlined />} onClick={() => handleClone(record.id)}>
             克隆
           </Button>
+          <Button size="small" icon={<CodeOutlined />} onClick={() => handleViewSource(record)}>
+            源码
+          </Button>
           <Popconfirm title="确定删除该策略？" onConfirm={() => handleDelete(record.id)} okText="删除" cancelText="取消">
             <Button size="small" danger icon={<DeleteOutlined />}>删除</Button>
           </Popconfirm>
@@ -174,6 +177,24 @@ const StrategyList: React.FC = () => {
           bordered
         />
       )}
+      <Modal
+        title={`编辑源码 — ${sourceModal.name}`}
+        open={sourceModal.visible}
+        onCancel={() => setSourceModal(prev => ({ ...prev, visible: false }))}
+        onOk={handleSaveSource}
+        confirmLoading={saving}
+        okText="保存"
+        cancelText="取消"
+        width={800}
+      >
+        <Input.TextArea
+          value={sourceModal.code}
+          onChange={e => setSourceModal(prev => ({ ...prev, code: e.target.value }))}
+          rows={20}
+          style={{ fontFamily: 'monospace', fontSize: 13 }}
+          placeholder="粘贴 Python 策略代码..."
+        />
+      </Modal>
     </div>
   );
 };

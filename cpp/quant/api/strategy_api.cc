@@ -500,6 +500,7 @@ ApiResponse StrategyApi::handle_request(const std::string& method,
         if (action == "start_live" && method == "POST")       return start_live_strategy(id);
         if (action == "stop_live" && method == "POST")        return stop_live_strategy(id);
         if (action == "live_status" && method == "GET")       return live_status(id);
+        if (action == "source" && method == "PUT")            return set_source_code(id, body);
         return error_response(404, "Not found");
     }
 
@@ -536,6 +537,7 @@ ApiResponse StrategyApi::register_strategy(const std::string& body) {
     std::string name;
     std::string graph_path;
     std::string graph_content;  // JSON string of the .graph IR
+    std::string source_code;
     std::unordered_map<std::string, double> params;
 
     try {
@@ -546,6 +548,8 @@ ApiResponse StrategyApi::register_strategy(const std::string& body) {
             p.expect(':');
             if (k == "name") {
                 name = p.parse_string();
+            } else if (k == "source_code") {
+                source_code = p.parse_string();
             } else if (k == "graph_path") {
                 graph_path = p.parse_string();
             } else if (k == "graph_content") {
@@ -592,7 +596,7 @@ ApiResponse StrategyApi::register_strategy(const std::string& body) {
         }
     }
 
-    auto id = engine_.registry().register_strategy(name, graph_path, params);
+    auto id = engine_.registry().register_strategy(name, graph_path, params, source_code);
     auto* entry = engine_.registry().find(id);
     if (!entry) {
         return error_response(500, "Failed to register strategy");
@@ -1034,6 +1038,40 @@ ApiResponse StrategyApi::live_list() {
     return success_response(w.os.str());
 }
 
+ApiResponse StrategyApi::set_source_code(uint64_t id, const std::string& body) {
+    auto* entry = engine_.registry().find(id);
+    if (!entry) return error_response(404, "Strategy not found");
+
+    // body is a JSON object: {"source_code": "..."}
+    std::string code;
+    for (size_t i = 0; i < body.size(); ) {
+        if (body[i] == '"') {
+            size_t start = ++i;
+            while (i < body.size() && body[i] != '"') ++i;
+            std::string key = body.substr(start, i - start);
+            ++i; // skip closing "
+            while (i < body.size() && body[i] != '"') ++i;
+            ++i; // skip opening "
+            size_t vs = i;
+            while (i < body.size() && body[i] != '"') {
+                if (body[i] == '\\') ++i; // skip escaped char
+                ++i;
+            }
+            if (key == "source_code") {
+                code = body.substr(vs, i - vs);
+            }
+            if (i < body.size()) ++i; // skip closing "
+        } else {
+            ++i;
+        }
+    }
+
+    if (code.empty()) return error_response(400, "Missing source_code");
+    if (!engine_.registry().set_source_code(id, code))
+        return error_response(500, "Failed to save source");
+    return success_response(entry_to_json(*entry));
+}
+
 // ── JSON serialization ──
 
 std::string StrategyApi::entry_to_json(const strategy::StrategyEntry& entry) {
@@ -1045,7 +1083,8 @@ std::string StrategyApi::entry_to_json(const strategy::StrategyEntry& entry) {
     w.key("status"); w.str_val(status_to_string(entry.status)); w.comma();
     w.key("params"); write_params(w, entry.params); w.comma();
     w.key("created_at"); w.int_val(entry.created_at); w.comma();
-    w.key("updated_at"); w.int_val(entry.updated_at);
+    w.key("updated_at"); w.int_val(entry.updated_at); w.comma();
+    w.key("source_code"); w.str_val(entry.source_code);
     w.end_obj();
     return w.os.str();
 }
